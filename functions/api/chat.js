@@ -1,4 +1,4 @@
-// Backend code for Hugging Face
+// Final backend code with a unique "proof of life" error message
 const websiteContext = `
   You are a friendly and professional AI assistant for a company called GemState Technology.
   Based on the context below, answer the user's question. If the answer is not in the context, say "I'm sorry, I don't have that information."
@@ -13,7 +13,7 @@ const websiteContext = `
 export async function onRequest(context) {
   try {
     const { message } = await context.request.json();
-    const apiKey = context.env.HF_API_TOKEN; // Note the new variable name
+    const apiKey = context.env.HF_API_TOKEN;
 
     const fullPrompt = `${websiteContext}\n\nUSER'S QUESTION:\n${message}`;
 
@@ -27,6 +27,14 @@ export async function onRequest(context) {
     );
 
     const hfData = await hfResponse.json();
+
+    if (hfData.error) {
+      return new Response(JSON.stringify({ error: `Hugging Face Error: ${hfData.error}` }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const reply = hfData[0].generated_text.replace(fullPrompt, "").trim();
 
     return new Response(JSON.stringify({ reply: reply }), {
@@ -35,7 +43,8 @@ export async function onRequest(context) {
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Failed to get a response from the AI' }), {
+    // THIS IS THE UNIQUE ERROR MESSAGE WE ARE ADDING
+    return new Response(JSON.stringify({ error: `PROOF OF NEW CODE! The underlying error is: ${error.message}` }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

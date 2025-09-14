@@ -1,36 +1,52 @@
-const chatWindow = document.getElementById('chat-window');
-const messageInput = document.getElementById('message-input');
-const sendButton = document.getElementById('send-button');
+// Final backend code with improved error handling
+const websiteContext = `
+  You are a friendly and professional AI assistant for a company called GemState Technology.
+  Based on the context below, answer the user's question. If the answer is not in the context, say "I'm sorry, I don't have that information."
 
-function addMessage(message, sender) {
-    const messageElement = document.createElement('div');
-    messageElement.classList.add('message', sender === 'user' ? 'user-message' : 'bot-message');
-    messageElement.textContent = message;
-    chatWindow.appendChild(messageElement);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-}
+  CONTEXT:
+  - Company Name: GemState Technology
+  - Location: Twin Falls, Idaho
+  - Services: Custom Web Development, IT Consulting, Software Solutions
+  - Process: We start with a free initial consultation.
+`;
 
-async function sendMessage() {
-    const message = messageInput.value.trim();
-    if (message === '') return;
-    addMessage(message, 'user');
-    messageInput.value = '';
+export async function onRequest(context) {
+  try {
+    const { message } = await context.request.json();
+    const apiKey = context.env.HF_API_TOKEN;
 
-    try {
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: message }),
-        });
-        const data = await response.json();
-        addMessage(data.reply, 'bot');
-    } catch (error) {
-        addMessage('Sorry, something went wrong. Please try again.', 'bot');
+    const fullPrompt = `${websiteContext}\n\nUSER'S QUESTION:\n${message}`;
+
+    const hfResponse = await fetch(
+      "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        method: "POST",
+        body: JSON.stringify({ "inputs": fullPrompt }),
+      }
+    );
+
+    const hfData = await hfResponse.json();
+
+    // NEW: Check for a specific error from Hugging Face and show it to us.
+    if (hfData.error) {
+      return new Response(JSON.stringify({ error: `Hugging Face Error: ${hfData.error}` }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
+
+    const reply = hfData[0].generated_text.replace(fullPrompt, "").trim();
+
+    return new Response(JSON.stringify({ reply: reply }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: `A different error occurred: ${error.message}` }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }
-sendButton.addEventListener('click', sendMessage);
-messageInput.addEventListener('keypress', (event) => {
-    if (event.key === 'Enter') {
-        sendMessage();
-    }
-});

@@ -1,49 +1,33 @@
-// This is the backend code that runs securely on Cloudflare
-
+// Backend code for Hugging Face
 const websiteContext = `
-  About GemState Technology: We are a technology solutions provider based in Twin Falls, Idaho. We help local businesses succeed with cutting-edge technology. It is currently September 2025.
+  You are a friendly and professional AI assistant for a company called GemState Technology.
+  Based on the context below, answer the user's question. If the answer is not in the context, say "I'm sorry, I don't have that information."
 
-  Our Services:
-  - Custom Web Development: We build beautiful, fast, and responsive websites.
-  - IT Consulting: We provide expert advice to optimize technology and security.
-  - Software Solutions: We create custom software to streamline business operations.
-
-  Our Process: We start with a free initial consultation to understand your goals.
+  CONTEXT:
+  - Company Name: GemState Technology
+  - Location: Twin Falls, Idaho
+  - Services: Custom Web Development, IT Consulting, Software Solutions
+  - Process: We start with a free initial consultation.
 `;
 
 export async function onRequest(context) {
   try {
-    if (context.request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405 });
-    }
-
     const { message } = await context.request.json();
+    const apiKey = context.env.HF_API_TOKEN; // Note the new variable name
 
-    const fullPrompt = `
-      You are GemStateBot, a friendly AI assistant for GemState Technology.
-      Answer the user's question based *only* on the context provided below.
-      If the answer is not in the context, say "I'm sorry, I don't have that information."
-      Keep your answers concise.
+    const fullPrompt = `${websiteContext}\n\nUSER'S QUESTION:\n${message}`;
 
-      CONTEXT:
-      ---
-      ${websiteContext}
-      ---
+    const hfResponse = await fetch(
+      "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        method: "POST",
+        body: JSON.stringify({ "inputs": fullPrompt }),
+      }
+    );
 
-      USER'S QUESTION:
-      ${message}
-    `;
-
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${context.env.GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: fullPrompt }] }],
-      }),
-    });
-
-    const geminiData = await geminiResponse.json();
-    const reply = geminiData.candidates[0].content.parts[0].text;
+    const hfData = await hfResponse.json();
+    const reply = hfData[0].generated_text.replace(fullPrompt, "").trim();
 
     return new Response(JSON.stringify({ reply: reply }), {
       status: 200,
@@ -51,7 +35,7 @@ export async function onRequest(context) {
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Failed to get a response' }), {
+    return new Response(JSON.stringify({ error: 'Failed to get a response from the AI' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
